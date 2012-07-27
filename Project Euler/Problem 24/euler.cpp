@@ -15,6 +15,8 @@ void print(Iterator begin, Iterator end) {
 
 int permutate(Iterator begin, Iterator end, int maxCount) {
   int count = 0;
+  int countForPermutation = factorial((end-begin));
+  if(countForPermutation < maxCount) return countForPermutation - 1;
   if(end-begin <= 1) return 0;
   if(end-begin <= 2) { 
     iter_swap(begin, begin+1);
