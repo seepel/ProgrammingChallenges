@@ -11,4 +11,6 @@ H(5) = 30. H(10) = 138. H(1 000) = 1177848.
 
 Find H(100 000 000).
 
+Comment
+=======
 I found a solution that works... just not fast enough.
