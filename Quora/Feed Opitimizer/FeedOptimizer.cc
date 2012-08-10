@@ -1,16 +1,17 @@
-#include <vector>
 #include <string>
 #include <algorithm>
 #include <iostream>
-#include <map>
+#include <deque>
+#include <vector>
+#include <stdint.h>
 
 using namespace std;
 
 struct Story {
-  int id;
-  int time;
-  int score;
-  int height;
+  uint64_t id;
+  uint64_t time;
+  uint64_t score;
+  uint64_t height;
 };
 
 bool operator== (const Story& story1, const Story& story2) { return story1.id  == story2.id; }
@@ -18,8 +19,7 @@ bool operator!= (const Story& story1, const Story& story2) { return !(story1  ==
 bool operator< (const Story& story1, const Story& story2) { return story1.id  < story2.id; }
 
 struct Refresh {
-  int time;
-  vector<Story> stories;
+  uint64_t time;
 };
 
 enum {
@@ -28,40 +28,46 @@ enum {
   ERROR
 };
 
+
+
 void parse();
-int parseType();
-Story parseStory(int id);
-void printRefresh(Refresh refresh, int height);
-int scoreForStories(vector<Story> stories);
-Refresh parseRefresh(vector<Story> stories, int timeWindow);
-vector<Story> parseStoriesForRefresh(vector<Story> stories, int time);
-vector<Story> packStories(vector<Story> stories, int height);
+uint64_t parseType();
+Story parseStory(uint64_t id);
+void addScore(Story &story);
+Refresh parseRefresh();
+void packStories();
+
+deque<Story> stories_;
+uint64_t timeWindow_;
+bool didPop_;
+uint64_t height_;
 
 void parse() {
-  int numberOfEvents;
-  int timeWindow;
-  int height;
+  uint64_t numberOfEvents;
   cin >> numberOfEvents;
-  cin >> timeWindow;
-  cin >> height;
-  vector<Story> stories;
-  int id = 0;
-  for(int i=0; i != numberOfEvents; i++) {
-    int type = parseType();
+  cin >> timeWindow_;
+  cin >> height_;
+  uint64_t id = 0;
+  didPop_ = false;
+  for(uint64_t i=0; i != numberOfEvents; i++) {
+    uint64_t type = parseType();
+    uint64_t score = 0;
     switch(type) {
       case STORY:
-	stories.push_back(parseStory(++id));
-	break;
+        stories_.push_back(parseStory(++id));
+        if(!didPop_) addScore(stories_[stories_.size()-1]);
+        break;
       case REFRESH:
-	printRefresh(parseRefresh(stories, timeWindow), height);
-	break;
+        parseRefresh();
+        packStories();
+        break;
       case ERROR:
-	break;
+        break;
     }
   }
 };
 
-int parseType() {
+uint64_t parseType() {
   string type;
   cin >> type;
   if(type == "S") {
@@ -72,142 +78,94 @@ int parseType() {
   return ERROR;
 }
 
-Story parseStory(int id) {
+vector<vector<uint64_t> > totalScores_;
+vector<vector<uint64_t> > totalIds_;
+
+void addScore(Story &story) {
+  uint64_t next = totalScores_.size();
+  vector<uint64_t> nextRow;
+  totalScores_.push_back(nextRow);
+  vector<uint64_t> nextIds;
+  totalIds_.push_back(nextIds);
+  for(uint64_t h=0; h<=height_; h++) {
+    uint64_t id = 0;
+    if(h >= story.height) {
+      if(next == 0) {
+        totalScores_[next].push_back(story.score);
+        id = story.id;
+      } else {
+        totalScores_[next].push_back(max(totalScores_[next-1][h], totalScores_[next-1][h-story.height] + story.score));
+        if(totalScores_[next][h] > totalScores_[next-1][h])
+          id = story.id;
+      }
+    } else {
+      if(next == 0) {
+        totalScores_[next].push_back(0);
+      } else {
+        totalScores_[next].push_back(totalScores_[next-1][h]);
+      }
+    }
+    totalIds_[next].push_back(id);
+  }
+}
+
+Story parseStory(uint64_t id) {
   Story story;
   story.id = id;
-  int time;
-  int score;
-  int height;
+  uint64_t time;
+  uint64_t score;
+  uint64_t height;
   cin >> story.time;
   cin >> story.score;
   cin >> story.height;
   return story;
 }
 
-Refresh parseRefresh(vector<Story> stories, int timeWindow) {
+Refresh parseRefresh() {
   Refresh refresh;
   cin >> refresh.time;
-  refresh.stories = parseStoriesForRefresh(stories, refresh.time - timeWindow);
+  while(refresh.time - stories_.front().time > timeWindow_) {
+    stories_.pop_front();
+    didPop_ = true;;
+  }
   return refresh;
 }
 
-vector<Story> parseStoriesForRefresh(vector<Story> stories, int time) {
-  vector<Story> storiesForRefresh;
-  for(vector<Story>::reverse_iterator story = stories.rbegin(); story != stories.rend(); story++) {
-    if(story->time < time)
-      break;
-    storiesForRefresh.push_back(*story);
+void printItems(vector<vector<uint64_t> > &ids, int64_t row, int64_t col) {
+  if(row < 0 || col < 0) return;
+  uint64_t id = totalIds_[row][col];
+  if(id == 0) {
+    row--;
+  } else {
+    col -= stories_[row].height;
+    row--;
   }
-  return storiesForRefresh;
-}
+  printItems(ids, row, col);
+  if(id != 0) {
+    cout << id << " ";
+  }
+};
 
-void printRefresh(Refresh refresh, int height) {
-  vector<Story> stories = packStories(refresh.stories, height);
-  int score = 0;
-  for(vector<Story>::iterator story = stories.begin(); story != stories.end(); story++)
-    score += story->score;
-  cout << score << " " << stories.size();
-  for(vector<Story>::iterator story = stories.begin(); story != stories.end(); story++)
-    cout << " " << story->id;
+void packStories() {
+  // rebuild the matrix if we've removed elements and the new maximum is larger
+  // OR if the current list has lost an element
+  //if((didPop_ && (totalScores_[totalScores_.size()-1][height_] != totalScores_[totalScores_.size()-2][height_])) || didPopBig_) {
+  if(didPop_) {
+    totalScores_.clear();
+    totalIds_.clear();
+    for(uint64_t s=0; s!=stories_.size(); s++) {
+      addScore(stories_[s]);
+    }
+    didPop_ = false;
+  }
+  cout << totalScores_[stories_.size()-1][height_] << " ";
+  bool keepGoing = true;
+  uint64_t row = totalScores_.size()-1;
+  uint64_t col = totalScores_[totalScores_.size()-1].size()-1;
+  printItems(totalIds_, row, col);
+
   cout << endl;
-}
-
-int scoreForStories(vector<Story> stories) {
-  int score = 0;
-  for(vector<Story>::iterator story = stories.begin(); story != stories.end(); story++) {
-    score += story->score;
-  }
-  return score;
-}
-
-bool sortStoriesByDensity(Story story1, Story story2) {
-  return (float)story1.score/(float)story1.height <= (float)story2.score/(float)story2.height;
-}
-
-bool sortStoriesById(Story story1, Story story2) {
-  return story1.id < story2.id;
-}
-
-template<class T>
-bool compareSize(vector<T> set1, vector<T> set2) {
-  if(set1.size() != set2.size())
-    return set1.size() < set2.size();
-  for(int i=0; i != set1.size(); i++) {
-    if(set1[i] != set2[i])
-      return set1[i] < set2[i];
-  }
-  return false;
-}
-
-vector<Story> packStories(vector<Story> stories, int height) {
-  vector<Story> packedStories;
-  vector<int> heights;
-  vector<int> scores;
-  vector<vector<int> > m;
-  scores.push_back(0);
-  heights.push_back(height+1);
-  for(vector<Story>::iterator story = stories.begin(); story != stories.end(); story++) {
-    heights.push_back(story->height);
-    scores.push_back(story->score);
-  }
-  map<int, map<int, vector<Story> > > sets;
-  map<int, map<int, int> > totalScores;
-  for(int i=0; i!=scores.size(); i++) {
-    for(int h=0; h<=height; h++) {
-      if(i == 0 || h == 0) {
-	vector<Story> set;
-	sets[i][h] = set;
-	totalScores[i][h] = 0;
-      } else if(heights[i] > h) {
-	vector<Story> set(sets[i-1][h]);
-	sets[i][h] = set;
-	totalScores[i][h] = totalScores[i-1][h];
-      } else {
-	if(totalScores[i-1][h] < totalScores[i-1][h - heights[i]] + scores[i]) {
-	  vector<Story> set(sets[i-1][h - heights[i]]);
-	  set.push_back(stories[i-1]);
-	  sets[i][h] = set;
-	  totalScores[i][h] = totalScores[i-1][h - heights[i]] + scores[i];
-	} else {
-	  vector<Story> set(sets[i-1][h]);
-	  sets[i][h] = set;
-	  totalScores[i][h] = totalScores[i-1][h];
-	}
-      }
-      sort(sets[i][h].begin(), sets[i][h].end());
-    }
-  }
-  int maxScore = 0;
-  vector<vector<Story> > maxSets;
-  for(int i=0; i!=scores.size(); i++) {
-    for(int h=0; h<=height; h++) {
-      if(totalScores[i][h] >= maxScore) {
-	if(totalScores[i][h] > maxScore)
-	  maxSets.clear();
-	maxScore = totalScores[i][h];
-	if(find(maxSets.begin(), maxSets.end(), sets[i][h]) == maxSets.end())
-	  maxSets.push_back(sets[i][h]);
-      }
-    }
-  }
-  sort(maxSets.begin(), maxSets.end(), compareSize<Story>);
-  packedStories = maxSets[0];
-  return packedStories;
-}
-
-vector<Story> packStoriesByGreedy(vector<Story> stories, int height) {
-  vector<Story> packedStories;
-  sort(stories.begin(), stories.end(), sortStoriesByDensity);
-  int heightSoFar = 0;
-  for(vector<Story>::iterator story = stories.begin(); story != stories.end(); story++) {
-    if(story->height + heightSoFar > height)
-      continue;
-    heightSoFar += story->height;
-    packedStories.push_back(*story);
-  }
-  sort(packedStories.begin(), packedStories.end(), sortStoriesById);
-  return packedStories;
-}
+};
 
 int main(int argc, const char* argv[]) {
   parse();
