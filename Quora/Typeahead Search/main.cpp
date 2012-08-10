@@ -243,7 +243,6 @@ class Tree {
         if(inAll)
           queryResults.insert(queryResult->boost(boosts));
       }
-      for(int i=0; i!= 40000; i++) { }
       return result;
     };
 
