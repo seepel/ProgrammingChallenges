@@ -112,4 +112,5 @@ In this problem, we are presenting a representative simplified version of our se
 
 COMMENT
 -------
-My solution may be slow, but I suppose it works.
+Aug 09) My solution may be slow, but I suppose it works.
+Aug 10) Found a way to speed up the output of QUERY Requests, but if the challenge were changed such that there were more boosted queries this would take a lot longer!

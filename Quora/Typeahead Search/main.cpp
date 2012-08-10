@@ -159,7 +159,7 @@ Query parseWQuery() {
   return query;
 };
 
-typedef set<QueryResult, QueryResultCompare> QuerySet;
+typedef set<QueryResult, QueryResultPrioritize> QuerySet;
 typedef set<QueryResult, QueryResultPrioritize> QueryPrioritizedSet;
 typedef string::const_iterator StrItr;
 
@@ -191,13 +191,13 @@ class Leaf {
     }
   };
 
-  Leaf *find(StrItr begin, StrItr end, vector<Leaf *> &queryResults, vector<Boost> &boosts, int max = 20) {
+  Leaf *find(StrItr begin, StrItr end) {
     if(children.find(*begin) == children.end()) { return NULL; }
     Leaf *leaf = children[*begin];
     if(end-begin == 1) {
       return leaf;
     }
-    return leaf->find(begin+1, end, queryResults, boosts, max);
+    return leaf->find(begin+1, end);
   };
 
 };
@@ -218,13 +218,13 @@ class Tree {
 
     void remove(QueryResult &result) { root.remove(result); }
 
-    QuerySet find(vector<string> &tokens, QueryPrioritizedSet &queryResults, vector<Boost> &boosts, int max = 20) {
+    QuerySet find(vector<string> &tokens, vector<Boost> &boosts, int max = 20) {
       QuerySet result;
       vector<Leaf *> leafs;
       for(vector<string>::iterator token = tokens.begin(); token != tokens.end(); token++) {
         transform(token->begin(), token->end(), token->begin(), ::tolower);
         Leaf *leaf = NULL;
-        leaf = root.find(token->begin(), token->end(), leafs, boosts, max);
+        leaf = root.find(token->begin(), token->end()); 
         if(leaf == NULL)
           return result;
         leafs.push_back(leaf);
@@ -232,7 +232,7 @@ class Tree {
 
       if(leafs.size() == 0) return result;
       sort(leafs.begin(), leafs.end(), sortLeafs);
-      for(QuerySet::iterator queryResult = leafs[0]->queryResults.begin(); queryResult != leafs[0]->queryResults.end(); queryResult++) {
+      for(QuerySet::reverse_iterator queryResult = leafs[0]->queryResults.rbegin(); queryResult != leafs[0]->queryResults.rend(); queryResult++) {
         bool inAll = true;
         for(int i=1; i!=leafs.size(); i++) {
           if(leafs[i]->queryResults.find(*queryResult) == leafs[i]->queryResults.end()) {
@@ -241,25 +241,27 @@ class Tree {
           }
         }
         if(inAll)
-          queryResults.insert(queryResult->boost(boosts));
+          result.insert(queryResult->boost(boosts));
+        if(boosts.size() == 0 && result.size() == max)
+          return result;
       }
       return result;
     };
 
-    QuerySet find(vector<string> &tokens, QueryPrioritizedSet &queryResults, int max = 20) {
+    QuerySet find(vector<string> &tokens, int max = 20) {
       vector<Boost> boosts;
-      return find(tokens, queryResults, boosts, max);
+      return find(tokens, boosts, max);
     };
 
-    QuerySet find(const string &token, QueryPrioritizedSet &queryResults, vector<Boost> &boosts, int max = 20) {
+    QuerySet find(const string &token, vector<Boost> &boosts, int max = 20) {
       vector<string> tokens;
       tokens.push_back(token);
-      return find(tokens, queryResults, boosts, max);
+      return find(tokens, boosts, max);
     };
 
-    QuerySet find(const string &token, QueryPrioritizedSet &queryResults, int max = 20) {
+    QuerySet find(const string &token, int max = 20) {
       vector<Boost> boosts;
-      return find(token, queryResults, boosts, max);
+      return find(token, boosts, max);
     };
 
 };
@@ -304,17 +306,15 @@ int main(void) {
       Query query = parseQuery();
 #ifndef PARSE_ONLY
       vector<string> words = split(query.data.substr(1,query.data.size()-1), ' ');
-      QueryPrioritizedSet queryResults;
-      QuerySet querySet = tree.find(words, queryResults, query.numberOfResults);
-      printQueryResults(queryResults, query.numberOfResults);
+      QuerySet querySet = tree.find(words, query.numberOfResults);
+      printQueryResults(querySet, query.numberOfResults);
 #endif
      } else if(type == "WQUERY") {
       Query query = parseWQuery();
 #ifndef PARSE_ONLY
       vector<string> words = split(query.data.substr(1,query.data.size()-1), ' ');
-      QueryPrioritizedSet queryResults;
-      QuerySet querySet = tree.find(words, queryResults, query.boosts, query.numberOfResults);
-      printQueryResults(queryResults, query.numberOfResults);
+      QuerySet querySet = tree.find(words, query.boosts, query.numberOfResults);
+      printQueryResults(querySet, query.numberOfResults);
 #endif
     }
   }
