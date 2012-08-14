@@ -13,70 +13,96 @@ enum {
   VISITED = 4
 };
 
-int degree(vector<vector<int> > &rooms, int row, int col) {
-  int degree = 0;
-  if(row > 0) if(rooms[row-1][col] == 0) degree++;
-  if(row < rooms.size()-1) if(rooms[row+1][col] == 0) degree++;
-  if(col  > 0) if(rooms[row][col-1] == 0) degree++;
-  if(col < rooms[row].size()-1) if(rooms[row][col+1] == 0) degree++;
-  return degree;
+struct Room;
+
+struct Room {
+  int type;
+  bool visited;
+  vector<Room *> rooms;
+};
+
+int total = 0;
+int visited = 0;
+vector<vector<Room *> > matrix;
+
+void visit(Room *room) {
+  room->visited = true;
+  visited++;
 }
 
-int count(vector<vector<int> > &rooms, int row, int col, int endrow, int endcol) {
-  if(row >= rooms.size()) return 0;
-  if(row < 0) return 0;
-  if(col >= rooms[row].size()) return 0;
-  if(col < 0) return 0;
-  if(rooms[row][col] == END) {
-    for(int i=0; i!=rooms.size(); i++) {
-      for(int j=0; j!=rooms[i].size(); j++) {
-        if(rooms[i][j] == 0)
-          return 0;
-      }
+void unvisit(Room *room) {
+  room->visited = false;
+  visited--;
+};
+
+vector<Room *> roomsToUnvisit;
+
+bool connected(Room *room, bool doUnvisit = true) {
+  visit(room);
+  bool isConnected = false;
+  if(visited == total) isConnected = true;
+  roomsToUnvisit.push_back(room);
+  for(int i=0; i!=room->rooms.size(); i++) {
+    if(isConnected) break;
+    if(!room->rooms[i]->visited) isConnected = connected(room->rooms[i], false);
+  }
+  if(doUnvisit) {
+    for(int i=0; i!=roomsToUnvisit.size(); i++) {
+      unvisit(roomsToUnvisit[i]);
     }
-    return 1;
+    roomsToUnvisit.clear();
   }
-  if(rooms[row][col] != OWNED) return 0;
-  if(degree(rooms, endrow, endcol) == 0) {
-    return 0;
-  }
-  rooms[row][col] = VISITED;
+  return isConnected;
+};
+
+int count(Room *room) {
   int sum = 0;
-  sum += count(rooms, row+1, col, endrow, endcol);
-  sum += count(rooms, row-1, col, endrow, endcol);
-  sum += count(rooms, row, col+1, endrow, endcol);
-  sum += count(rooms, row, col-1, endrow, endcol);
-  rooms[row][col] = OWNED;
+  if(!connected(room)) {  return 0; }
+  visit(room);
+  if(room->type == END && visited == total) sum = 1;
+  for(int i=0; i!=room->rooms.size(); i++) {
+    if(!room->rooms[i]->visited) sum += count(room->rooms[i]);
+  }
+  unvisit(room);
   return sum;
-}
+};
 
 int main(void) {
   int width, height;
   cin >> width;
   cin >> height;
   int value;
-  vector<vector<int> > matrix;
   int row = 0;
   int col = 0;
   int endrow = 0;
   int endcol = 0;
+  Room *start = NULL;
   for(int i=0; i!=height; i++) {
-    vector<int> nextRow;
+    vector<Room *> nextRow;
     for(int j=0; j!=width; j++) {
       cin >> value;
-      nextRow.push_back(value);
-      if(value == 2) {
-        row = i;
-        col = j;
+      if(value == 1) { nextRow.push_back(NULL); continue; }
+      Room *room = new Room();
+      room->type = value;
+      room->visited = false;
+      total++;
+      if(i > 0) {
+        if(matrix[i-1][j] != NULL) {
+          room->rooms.push_back(matrix[i-1][j]);
+          matrix[i-1][j]->rooms.push_back(room);
+        }
       }
-      if(value == 3) {
-        endrow = i;
-        endcol = j;
+      if(j > 0) {
+        if(nextRow[j-1] != NULL) {
+          room->rooms.push_back(nextRow[j-1]);
+          nextRow[j-1]->rooms.push_back(room);
+        }
       }
+      if(room->type == START) start = room;
+      nextRow.push_back(room);
     }
     matrix.push_back(nextRow);
   }
-  matrix[row][col] = OWNED;
-  cout << count(matrix, row, col, endrow, endcol) << endl;
+  cout << count(start) << endl;
   return 0;
 }
